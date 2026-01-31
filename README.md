@@ -1,96 +1,81 @@
-# Centralized-Task-Execution-Retry-Engine
-
-> **An enterprise-grade platform for reliable asynchronous task execution, retries, and operational recovery**
-
----
-
-## 🚀 Overview
-
-**Centralized-Task-Execution-Retry-Engine** is an internal-platform–style service designed to solve a problem that **every distributed system faces**:
-
-> *How do we execute background tasks reliably when failures, retries, duplicates, and partial executions are inevitable?*
-
-Instead of every microservice implementing its own retry logic, schedulers, idempotency checks, and failure handling, this platform **centralizes** those concerns into a **single, reusable reliability layer**.
-
----
-
-## 🧠 Why This Project Exists
-
-In real enterprise systems:
-
-- Network failures are common  
-- Downstream services are unreliable  
-- Duplicate requests happen  
-- Retries are often implemented inconsistently  
-- Operational recovery is mostly manual  
-
-Most teams solve these problems **independently**, leading to:
-- Duplicated code
-- Inconsistent retry behavior
-- Retry storms
-- Difficult debugging
-- Poor observability
-
-**Centralized-Task-Execution-Retry-Engine** addresses this by providing:
-- A standard execution model
-- Controlled retries with backoff
-- Idempotency guarantees
-- Dead-letter handling
-- Admin-level recovery APIs
-- Metrics and observability
-
----
-
-## ✨ Key Features
-
-### ✅ Reliable Async Execution
-- Tasks are persisted before execution
-- Execution happens asynchronously using a bounded thread pool
-- HTTP request threads are never blocked
-
-### 🔁 Automatic Retries with Exponential Backoff
-- Configurable retry limits
-- Backoff strategy to prevent retry storms
-- Retry scheduling based on eligibility time
-
-### 🧾 Idempotency (Exactly-Once Illusion)
-- Redis-based idempotency keys
-- Prevents duplicate execution across:
-  - Client retries
-  - Scheduler retries
-  - Admin replays
-
-### ☠️ Dead-Letter Handling
-- Tasks exceeding retry limits are moved to `DEAD_LETTER`
-- Requires explicit human intervention
-- No infinite retries
-
-### 🧑‍💻 Admin & Operational APIs
-- Inspect failed and dead-letter tasks
-- Manually retry tasks
-- Replay tasks after fixes
-- Debug production incidents safely
-
-### 📊 Observability & Metrics
-- Task creation, success, failure, retry counters
-- Health endpoints via Spring Boot Actuator
-- Ready for Prometheus / Grafana integration
-
----
-
 ## 🏗️ High-Level Architecture
 
 ![Architecture Diagram](docs/images/architecture.png)
 
+At a high level, the platform works like a **reliability layer** that sits between producers of work and the actual execution logic.
+
 **Core components:**
-- REST API layer
-- Persistent task store (RDBMS)
-- Async execution engine (thread pool)
-- Retry scheduler
-- Redis for idempotency
-- Metrics & health monitoring
+- **REST API layer** – accepts task submissions and admin actions
+- **Persistent task store (RDBMS)** – source of truth for task state
+- **Async execution engine** – executes tasks using a bounded thread pool
+- **Retry scheduler** – retries failed tasks based on backoff rules
+- **Redis** – provides idempotency guarantees
+- **Metrics & health monitoring** – ensures operational visibility
+
+The system is intentionally **stateless at runtime** and **stateful in storage**, which makes it resilient to crashes and restarts.
 
 ---
 
-   ↓
-COMPLETED
+## 🔄 How a Task Flows Through the System
+
+![Execution Flow](docs/images/flow.png)
+
+1. A client submits a task via the API  
+2. The task is persisted in the database (`RECEIVED`)  
+3. Execution is dispatched asynchronously to a worker thread  
+4. On success → task is marked `SUCCESS`  
+5. On failure → task is scheduled for retry with backoff  
+6. After max retries → task moves to `DEAD_LETTER`  
+7. Admins can inspect, retry, or replay tasks safely  
+
+This flow ensures **no task is lost**, even during crashes or restarts.
+
+---
+
+## ⚙️ What Makes This Interesting (And Useful)
+
+This project is not about inventing a new idea —  
+it’s about **doing a common thing correctly and consistently**.
+
+What makes it valuable:
+
+- **Failure is treated as a first-class concept**
+- **Retries are deliberate, not accidental**
+- **Duplicate execution is actively prevented**
+- **Operational recovery is built-in**
+- **Observability is part of the design, not an afterthought**
+
+---
+
+## 🧪 Example Use Cases
+
+- Retry failed payment processing without double-charging
+- Ensure emails or notifications are sent exactly once
+- Reprocess failed background jobs after a bug fix
+- Safely handle client retries and duplicate requests
+- Provide ops teams visibility and control during incidents
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|------|-----------|
+| Language | Java 21 |
+| Framework | Spring Boot |
+| Persistence | Spring Data JPA |
+| Database | H2 (local), pluggable for production |
+| Cache | Redis |
+| Async Execution | ThreadPoolTaskExecutor |
+| Scheduling | Spring Scheduler |
+| Observability | Spring Boot Actuator + Micrometer |
+| API Docs | OpenAPI / Swagger |
+
+---
+
+## ▶️ Quick Start (Local)
+
+```bash
+git clone https://github.com/your-username/Centralized-Task-Execution-Retry-Engine.git
+cd Centralized-Task-Execution-Retry-Engine
+mvn spring-boot:run
